@@ -226,13 +226,16 @@ def simulate_tournament(model: PoissonModel,
 # ──────────────────────────────────────────────────────────────────────────────
 # Monte Carlo: probabilidad por ronda y de campeón
 # ──────────────────────────────────────────────────────────────────────────────
-def monte_carlo(n: int = 10000, seed: int = 42) -> pd.DataFrame:
+def monte_carlo(n: int = 10000, seed: int = 42, model=None) -> pd.DataFrame:
     """
     Simula el Mundial `n` veces y devuelve, por selección, la probabilidad de alcanzar
     cada ronda (clasificar de grupos, R16, cuartos, semis, final) y de ser campeón.
+
+    `model`: modelo de goles a usar. Si None, entrena el EloGoalModel por defecto. Se
+    puede pasar uno con ratings ajustados por talento (ver predict/talent.py).
     """
     rng = np.random.default_rng(seed)
-    model = train_elo_goal_model()      # goles ajustados por rival (corrige el sesgo)
+    model = model or train_elo_goal_model()   # goles ajustados por rival (corrige el sesgo)
     fixtures = load_world_cup_fixtures()
     all_teams = sorted(set(fixtures["home_team"]) | set(fixtures["away_team"]))
     grows = group_rows_by_letter(fixtures, GROUPS_BY_LETTER)   # pre-cómputo, fuera del loop
