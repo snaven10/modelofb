@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .gitignore
+# Regla de oro: NUNCA versiones secretos ni datos pesados/derivados.
+#   - Secretos (.env): si suben a git, quedan en el historial PARA SIEMPRE.
+#   - Datos: son reproducibles desde los loaders, no inflés el repo con ellos.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# --- Secretos / configuración local ---
+.env
+.env.*
+!.env.example          # ESTE sí se versiona: es la plantilla sin valores reales
+
+# --- Datos: ignoramos TODO el contenido pero conservamos las carpetas ---
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# --- Entorno virtual ---
+.venv/
+venv/
+env/
+
+# --- Artefactos de Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- Caché de la app (respuestas de API-Football) ---
+# Se llena solo y es reconstruible; no tiene por qué vivir en git.
+.cache/
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+.DS_Store
+
+# --- DevAI: índice/estado local de la herramienta de code-intelligence ---
+# Reconstruible (devai index) y específico de la máquina; no infla el repo.
+.devai/

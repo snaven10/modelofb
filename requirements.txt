@@ -1,0 +1,35 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# requirements.txt — dependencias del proyecto
+#
+# POR QUÉ ">=" y no "==":
+#   Es un proyecto de aprendizaje sobre Python 3.14. Usamos ">=" para que pip
+#   resuelva la versión más nueva COMPATIBLE con tu intérprete. En un proyecto
+#   de producción harías lo contrario (versiones clavadas + lockfile) para que
+#   el build sea reproducible. Acá priorizamos avanzar sin pelear con versiones.
+#
+# Instalación (DENTRO del venv):
+#   python -m pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+# --- Núcleo de datos: el pan de cada día en cualquier proyecto de ML ---
+pandas>=2.2          # DataFrames: toda la manipulación tabular pasa por aquí
+numpy>=1.26          # álgebra y arrays; pandas lo usa por debajo
+scipy>=1.13          # distribuciones estadísticas (Poisson vive aquí) y optimización
+pyarrow>=16.0        # motor de Parquet: guarda datasets processed preservando tipos (Int64/datetime)
+
+# --- Fuentes de datos ---
+statsbombpy>=1.11    # acceso a StatsBomb Open Data (xG ya calculado, sin API key)
+requests>=2.31       # llamadas HTTP crudas: football-data.co.uk y API-Football
+
+# --- Configuración / secretos ---
+python-dotenv>=1.0   # carga el .env para no hardcodear API keys en el código
+
+# --- Modelado de Machine Learning ---
+scikit-learn>=1.5    # regresión logística, métricas (log-loss, brier), calibración
+
+# --- Visualización / exploración ---
+matplotlib>=3.9      # curvas de calibración y gráficos de evaluación
+jupyter>=1.0         # notebooks para explorar datos antes de escribir módulos
+
+# --- Testing ---
+pytest>=8.0          # pruebas unitarias; correlo con: pytest -q
