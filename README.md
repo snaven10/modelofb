@@ -98,7 +98,10 @@ pytest -q
   - [x] backtest temporal contra el mercado (`src/evaluation/backtest.py`). Poisson Premier: log-loss 1.0681 vs mercado 0.9893 (gap +0.0788; le gana al azar 1.0986, no al mercado).
   - [x] calibración de hiperparámetros con grid search y split train/val/test (`src/evaluation/calibrate.py`). Óptimo honesto en validation: `ρ=0.0`, `ξ=0.5` (curva en U). Veredicto en test intocado: gap **+0.0590** (Poisson base era +0.0788).
   - [ ] graficar curvas de fiabilidad.
-- [ ] Fase 5 — aplicación final sobre el Mundial 2026.
+- [~] **Fase 5** — predicción del Mundial 2026 (`src/predict/world_cup.py`):
+  - [x] **Fuente de fixtures**: martj42 (NO API-Football — su plan free no da acceso a 2026, solo 2022–2024). martj42 ya trae los 72 fixtures del Mundial con la columna `neutral` (anfitriones México/USA/Canadá marcados), y los nombres calzan con el entrenamiento del Elo por construcción.
+  - [x] predicción 1X2 partido a partido con el Elo de selecciones (entrena con jugados, predice los pendientes respetando `neutral`). Sanity OK: España/Argentina top del ranking; favoritos coherentes.
+  - [ ] simulación Monte Carlo del bracket → probabilidad de avanzar de fase y de salir campeón.
 
 ## Filosofía
 
