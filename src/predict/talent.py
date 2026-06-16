@@ -12,12 +12,16 @@ CÓMO:
         rating_ajustado = ((1-w)·z(Elo) + w·z(log valor)) · std(Elo) + media(Elo)
     w=0 → Elo puro; w=1 → puro talento; w≈0.5 → máxima correlación con el mercado.
 
-HONESTIDAD (leé esto):
-    Esto ACERCA el modelo al mercado/talento, lo cual es plausiblemente mejor (el
-    mercado es el mejor predictor público). PERO no está validado contra RESULTADOS:
-    eso exigiría valor de mercado HISTÓRICO (no tenemos, es un snapshot 2026). Y el
-    valor sub-valora talento de selecciones menores cuyos jugadores no están en ligas
-    vistas. Es un ajuste informado, no una verdad probada. Ver squad_values.py.
+HALLAZGO CRÍTICO (validación robusta — corrige el w):
+    La validación contra RESULTADOS reales (13.851 partidos 2012-2026, ver
+    validate_talent_historical.py) reveló que el peso óptimo es w≈0.1 con una mejora
+    MÍNIMA (log-loss 0.8990→0.8975, ~0.17%). El w=0.5 (que MAXIMIZA el parecido al
+    mercado) EMPEORA la predicción de resultados (0.8990→0.9094). Lección: "parecerse al
+    mercado" ≠ "predecir mejor" — el mercado sobrevalora el talento. El Elo ya captura
+    casi toda la señal (los resultados ya reflejan el talento indirectamente); meter
+    talento con peso alto sobre-pondera el plantel y arruina la predicción. Por eso el
+    DEFAULT es w=0.1 (óptimo predictivo), no 0.5. Usá w=0.5 SOLO si querés el ranking
+    "alineado al mercado" (cosmético), no para predecir.
 """
 
 from __future__ import annotations
@@ -56,8 +60,12 @@ def adjust_elo_by_talent(elo: EloModel, w: float = 0.5) -> EloModel:
     return elo
 
 
-def champion_with_talent(w: float = 0.5, n: int = 10000, seed: int = 42):
-    """Monte Carlo del Mundial con el modelo de goles ajustado por talento de plantel."""
+def champion_with_talent(w: float = 0.1, n: int = 10000, seed: int = 42):
+    """
+    Monte Carlo del Mundial con el modelo de goles ajustado por talento de plantel.
+    Default w=0.1 (óptimo PREDICTIVO validado en 13.851 partidos). Pasá w=0.5 para el
+    ranking "alineado al mercado" (sube Francia/Inglaterra) — cosmético, no predictivo.
+    """
     from src.predict.bracket import monte_carlo
     from src.predict.simulate import train_elo_goal_model
 
