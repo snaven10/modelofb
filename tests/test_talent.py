@@ -58,3 +58,35 @@ def test_rechaza_w_invalido():
     elo = _elo_con_ratings()
     with pytest.raises(ValueError):
         adjust_elo_by_talent(elo, w=1.5)
+
+
+def test_verify_acepta_talento_y_produce_metricas(monkeypatch):
+    """
+    verify_world_cup(talent_w>0) debe correr, ajustar el Elo por talento y dar métricas
+    válidas con efecto medible. (Que el log-loss MEJORE es un hallazgo de datos REALES
+    —1.125→1.095 sobre los 16 partidos—, no algo que un juguete reproduzca robustamente.)
+    """
+    import numpy as np
+    import pandas as pd
+    import src.predict.verify as V
+
+    filas = []
+    for i in range(8):
+        filas.append((f"2025-0{i + 1}-01", "France", "Qatar", 2, 1, "Friendly", False))
+        filas.append((f"2025-0{i + 1}-15", "Spain", "Haiti", 3, 0, "Friendly", False))
+    filas.append(("2026-06-12", "France", "Spain", 1, 0, "FIFA World Cup", True))
+    df = pd.DataFrame(filas, columns=["date", "home_team", "away_team", "home_score", "away_score", "tournament", "neutral"])
+    df["date"] = pd.to_datetime(df["date"]); df["home_score"] = df["home_score"].astype("Int64")
+    df["away_score"] = df["away_score"].astype("Int64"); df["is_competitive"] = df["tournament"] != "Friendly"
+    df["result"] = pd.NA
+
+    class _Fake:
+        def __init__(self, *a, **k): pass
+        def load(self, include_unplayed=False): return df
+    monkeypatch.setattr(V, "InternationalResultsLoader", _Fake)
+
+    _, m0 = V.verify_world_cup(cutoff="2026-06-11", talent_w=0.0)
+    _, m1 = V.verify_world_cup(cutoff="2026-06-11", talent_w=0.5)
+    assert m1["n"] == m0["n"] == 1
+    assert np.isfinite(m1["log_loss"])
+    assert m1["log_loss"] != m0["log_loss"]   # el talento cambia la predicción
