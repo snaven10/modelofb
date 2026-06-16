@@ -89,6 +89,7 @@ pytest -q
   - [ ] API-Football (Mundial 2026, con caché en disco contra el límite diario).
 - [~] **Fase 3** — modelos:
   - [x] Elo de selecciones (localía vía `neutral`, K modulado por `is_competitive`, 1X2 con empate modelado). Top-20 del ranking coincide con las potencias reales.
+    - [x] **Modelo de empate calibrado**: la heurística `draw_max·(1−d)` decaía demasiado rápido (daba 4% de empate a favoritazos cuando la tasa real es ~12-24%). Reemplazada por una cuadrática `p_draw(d)=c0+c1·d+c2·d²` calibrada desde el histórico en `fit()`. Validado en 3.471 partidos held-out: log-loss 0.9079→0.8854.
   - [x] Poisson (ataque/defensa + matriz de marcadores → 1X2, marcador exacto, over/under). Validado con Premier real.
   - [x] Dixon-Coles (corrección de marcadores bajos `ρ` + decay temporal `ξ`). DC+decay baja el gap vs mercado de +0.0788 a +0.0636; `ρ` casi no aporta en 1X2, `ξ` sí. **Campeón actual: +0.0590 con ξ=0.5 calibrado.**
   - [x] Ensemble Elo+Dixon-Coles (`src/models/ensemble.py`, log-pooling geométrico/aritmético, peso `w` calibrable). **Resultado honesto: NO superó a DC solo.** En validation w=0.5 se veía mejor (curva en U), pero en test intocado el ensemble dio gap +0.0619 vs +0.0590 de DC solo — el Elo de clubes es más débil (ignora goles) y el w no generalizó. Código queda como herramienta reutilizable.

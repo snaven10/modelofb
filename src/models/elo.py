@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import logging
 
+import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,11 @@ class EloModel:
 
         # rating actual de cada selección. Las que no existen aún arrancan en base_rating.
         self.ratings: dict[str, float] = {}
+
+        # Coeficientes de la curva de empate p_draw(d) = c0 + c1·d + c2·d², con
+        # d=|2E−1| (el desbalance). Se calibran en fit() desde los datos reales. Mientras
+        # sea None, predict_proba usa la heurística vieja draw_max·(1−d).
+        self.draw_coef: tuple[float, float, float] | None = None
 
     # ──────────────────────────────────────────────────────────────────────
     # Acceso a ratings
@@ -113,7 +119,7 @@ class EloModel:
         (Se verifica fácil que las tres suman 1.)
         """
         e = self.expected_score(home, away, neutral)
-        p_draw = self.draw_max * (1.0 - abs(2.0 * e - 1.0))
+        p_draw = self._draw_prob(e)
         p_home = e - 0.5 * p_draw
         p_away = (1.0 - e) - 0.5 * p_draw
 
@@ -123,6 +129,48 @@ class EloModel:
         p_away = max(p_away, 0.0)
         total = p_home + p_draw + p_away
         return p_home / total, p_draw / total, p_away / total
+
+    def _draw_prob(self, e: float) -> float:
+        """
+        Probabilidad de empate dada E (expected score). Si la curva está calibrada
+        (draw_coef), usa la cuadrática ajustada a los datos; si no, la heurística vieja.
+
+        Los datos reales muestran que la tasa de empate es PLANA (~25%) salvo en
+        partidos muy desbalanceados, donde baja a ~12% — no el decaimiento lineal
+        brusco de la heurística. La cuadrática captura esa meseta + caída.
+        """
+        d = abs(2.0 * e - 1.0)
+        if self.draw_coef is not None:
+            c0, c1, c2 = self.draw_coef
+            return float(min(max(c0 + c1 * d + c2 * d * d, 0.02), 0.45))
+        return self.draw_max * (1.0 - d)
+
+    def _calibrate_draw(self, df: pd.DataFrame) -> None:
+        """
+        Ajusta p_draw(d) = c0 + c1·d + c2·d² por mínimos cuadrados sobre los partidos
+        históricos: d=|2E−1| (con los ratings ya entrenados como proxy de fuerza) e
+        y=1 si fue empate. Es una RELACIÓN agregada (la forma de la curva), no predicción
+        de partidos individuales, así que usar ratings finales como proxy es admisible.
+        """
+        d_vals, y = [], []
+        for row in df.itertuples(index=False):
+            if pd.isna(row.home_score) or pd.isna(row.away_score):
+                continue
+            h, a = row.home_team, row.away_team
+            if h not in self.ratings or a not in self.ratings:
+                continue
+            e = self.expected_score(h, a, bool(getattr(row, "neutral", False)))
+            d_vals.append(abs(2.0 * e - 1.0))
+            y.append(1.0 if row.home_score == row.away_score else 0.0)
+
+        if len(d_vals) < 200:          # con pocos datos no calibramos; queda la heurística
+            return
+        d_arr = np.array(d_vals)
+        X = np.column_stack([np.ones_like(d_arr), d_arr, d_arr ** 2])
+        coef, *_ = np.linalg.lstsq(X, np.array(y), rcond=None)
+        self.draw_coef = (float(coef[0]), float(coef[1]), float(coef[2]))
+        logger.info("Curva de empate calibrada: p_draw(d)=%.3f%+.3f·d%+.3f·d²",
+                    *self.draw_coef)
 
     # ──────────────────────────────────────────────────────────────────────
     # 2 + 3. Actualización tras un partido
@@ -195,6 +243,9 @@ class EloModel:
 
         logger.info("Elo entrenado con %d partidos · %d selecciones con rating",
                     procesados, len(self.ratings))
+
+        # Con los ratings ya entrenados, calibramos la curva de empate desde los datos.
+        self._calibrate_draw(ordered)
         return self
 
     def ranking(self, top: int | None = None) -> pd.DataFrame:

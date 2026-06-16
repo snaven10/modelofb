@@ -115,3 +115,60 @@ def test_fit_procesa_y_ordena():
     # C y D nunca se procesaron (partido sin marcador) -> siguen en base.
     assert elo.get_rating("C") == 1500
     assert elo.get_rating("D") == 1500
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Modelo de empate calibrado (curva p_draw(d) = c0 + c1·d + c2·d²)
+# ──────────────────────────────────────────────────────────────────────────────
+def test_draw_prob_usa_la_curva_calibrada_si_existe():
+    """Con draw_coef seteado, _draw_prob usa la cuadrática (no la heurística)."""
+    m = EloModel()
+    m.draw_coef = (0.25, 0.15, -0.38)        # curva tipo la calibrada de datos
+    # d = |2·0.5−1| = 0 (partido parejo) -> c0
+    assert m._draw_prob(0.5) == pytest.approx(0.25, abs=1e-9)
+
+
+def test_draw_prob_fallback_a_heuristica_sin_calibrar():
+    """Sin draw_coef (None), usa la heurística vieja draw_max·(1−d)."""
+    m = EloModel(draw_max=0.28)
+    assert m.draw_coef is None
+    assert m._draw_prob(0.5) == pytest.approx(0.28)          # d=0 -> draw_max
+    assert m._draw_prob(1.0) == pytest.approx(0.0, abs=1e-9)  # d=1 -> 0
+
+
+def test_draw_prob_clampea_a_rango_sano():
+    """La cuadrática nunca devuelve negativos ni valores absurdos."""
+    m = EloModel()
+    m.draw_coef = (0.25, 0.15, -0.38)
+    for e in (0.0, 0.25, 0.5, 0.75, 1.0):
+        p = m._draw_prob(e)
+        assert 0.02 <= p <= 0.45
+
+
+def test_curva_calibrada_es_mas_plana_que_la_heuristica():
+    """
+    El hallazgo clave: en favorito MEDIO la tasa real de empate es ~0.24, no ~0.15.
+    La curva calibrada debe dar MÁS empate que la heurística vieja en ese rango.
+    """
+    cal = EloModel(); cal.draw_coef = (0.253, 0.151, -0.377)
+    heur = EloModel(draw_max=0.28)            # sin calibrar
+    e_medio = 0.725                            # d ≈ 0.45 (favorito medio)
+    assert cal._draw_prob(e_medio) > heur._draw_prob(e_medio)
+
+
+def test_predict_proba_suma_uno_con_curva_calibrada():
+    m = EloModel(); m.draw_coef = (0.253, 0.151, -0.377)
+    ph, pd_, pa = m.predict_proba("X", "Y")    # equipos nuevos -> parejo
+    assert ph + pd_ + pa == pytest.approx(1.0)
+
+
+def test_calibrate_no_actua_con_pocos_datos():
+    """Con menos de 200 partidos, no calibra (deja la heurística) para no sobre-ajustar."""
+    df = pd.DataFrame({
+        "date": pd.to_datetime(["2020-01-01", "2020-02-01"]),
+        "home_team": ["A", "B"], "away_team": ["B", "A"],
+        "home_score": [1, 2], "away_score": [1, 0],
+        "neutral": [False, False],
+    })
+    m = EloModel().fit(df)
+    assert m.draw_coef is None                 # muy pocos datos -> sin calibrar
