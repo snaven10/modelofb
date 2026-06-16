@@ -115,3 +115,40 @@ def test_walk_forward_acierta_al_fuerte(monkeypatch):
     m, _ = walk_forward_verify(start="2018-01-01")
     assert m["accuracy"] >= 0.9
     assert m["log_loss"] < m["log_loss_azar"]
+
+
+def _wc_repetido_df():
+    """Mundial donde Spain juega DOS veces (para que el walk-forward tenga efecto)."""
+    filas = [
+        # warmup pre-Mundial: Spain fuerte
+        ("2025-09-01", "Spain", "Qatar", 3, 0, "Friendly", False),
+        ("2025-10-01", "Spain", "Cape Verde", 2, 0, "Friendly", False),
+        ("2025-11-01", "Qatar", "Cape Verde", 1, 1, "Friendly", False),
+        # Mundial: Spain juega 2 veces (golea primero → su rating sube)
+        ("2026-06-12", "Spain", "Cape Verde", 5, 0, "FIFA World Cup", True),
+        ("2026-06-17", "Spain", "Qatar", 1, 0, "FIFA World Cup", True),
+    ]
+    df = pd.DataFrame(filas, columns=["date", "home_team", "away_team",
+                                      "home_score", "away_score", "tournament", "neutral"])
+    df["date"] = pd.to_datetime(df["date"])
+    df["home_score"] = df["home_score"].astype("Int64")
+    df["away_score"] = df["away_score"].astype("Int64")
+    df["is_competitive"] = df["tournament"] != "Friendly"
+    df["result"] = pd.NA
+    return df
+
+
+def test_walk_forward_tiene_efecto_con_equipo_repetido(monkeypatch):
+    """
+    Si un equipo juega 2 veces, el walk-forward debe cambiar la predicción del 2º
+    partido (ya incorporó el 1º). Con corte fijo, ambos usan el mismo Elo congelado.
+    """
+    _patch(monkeypatch, _wc_repetido_df())
+    from src.predict.verify import verify_world_cup
+    t_fijo, _ = verify_world_cup(cutoff="2026-06-11", walk_forward=False)
+    t_wf, _ = verify_world_cup(cutoff="2026-06-11", walk_forward=True)
+
+    # La fila del 2º partido de Spain (vs Qatar) debe tener p_real distinto.
+    p_fijo = t_fijo[t_fijo["partido"].str.contains("Qatar")]["p_real"].iloc[0]
+    p_wf = t_wf[t_wf["partido"].str.contains("Qatar")]["p_real"].iloc[0]
+    assert p_fijo != p_wf            # el walk-forward incorporó la goleada previa

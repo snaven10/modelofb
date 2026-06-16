@@ -38,9 +38,15 @@ logger = logging.getLogger(__name__)
 WORLD_CUP_START = "2026-06-11"
 
 
-def verify_world_cup(cutoff: str = WORLD_CUP_START) -> tuple[pd.DataFrame, dict]:
+def verify_world_cup(cutoff: str = WORLD_CUP_START,
+                     walk_forward: bool = False) -> tuple[pd.DataFrame, dict]:
     """
     Entrena el Elo con partidos < cutoff y predice los partidos del Mundial ya jugados.
+
+    walk_forward=False: corte fijo — el Elo pre-torneo predice los 16 con ratings
+    congelados. walk_forward=True: recorre los partidos en orden y ACTUALIZA el Elo
+    tras cada uno, así las jornadas posteriores ya conocen las anteriores (más realista).
+
     Devuelve (tabla partido a partido, métricas agregadas).
     """
     df = InternationalResultsLoader().load(include_unplayed=True)
@@ -53,6 +59,8 @@ def verify_world_cup(cutoff: str = WORLD_CUP_START) -> tuple[pd.DataFrame, dict]
     ].copy()
     if played.empty:
         raise ValueError("No hay partidos del Mundial ya jugados para verificar.")
+    if walk_forward:
+        played = played.sort_values("date")     # el orden importa para actualizar bien
 
     model = EloModel().fit(train)
 
@@ -80,6 +88,11 @@ def verify_world_cup(cutoff: str = WORLD_CUP_START) -> tuple[pd.DataFrame, dict]
             "p_real": round({"H": ph, "D": pdraw, "A": pa}[real], 3),
             "ok": "✓" if ok else "✗",
         })
+        if walk_forward:
+            # Actualizamos DESPUÉS de predecir: la predicción no vio este partido,
+            # pero los siguientes del torneo sí lo aprovechan (jornada a jornada).
+            model.update_one(r.home_team, r.away_team, int(r.home_score), int(r.away_score),
+                             neutral=bool(r.neutral), is_competitive=bool(getattr(r, "is_competitive", True)))
 
     tabla = pd.DataFrame(filas)
     n = len(played)

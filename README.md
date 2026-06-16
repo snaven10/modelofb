@@ -108,6 +108,7 @@ pytest -q
   - (Histórico: con el Poisson crudo Irán salía #3 con 8% — sesgo de confederación débil, ya corregido.)
   - [x] **Verificación contra resultados reales** (`src/predict/verify.py`):
     - 16 partidos jugados del Mundial (sin leakage, entrena pre-torneo): 6/16 acierto, log-loss 1.13. Diagnóstico: tanda atípica con 50% empates; en decisivos 6/8 = 75%.
+    - Opción `walk_forward`: actualiza el Elo jornada a jornada. Hoy Δ=0 porque los 16 jugados son todos debuts de jornada 1 (32 equipos distintos, ninguno repite); aportará cuando avancen las jornadas 2-3. Mecánica verificada con test de equipo repetido.
     - **Walk-forward sobre 8.124 partidos** (desde 2018, predice-luego-actualiza): acierto **59.4%** (60.8% competitivos), log-loss **0.885** (azar 1.099) → el modelo le gana al azar holgado y está **bien calibrado** (curva de fiabilidad pegada a la diagonal; leve sub-confianza en favoritazos extremos).
 
 ## Filosofía
