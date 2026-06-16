@@ -101,7 +101,7 @@ pytest -q
 - [~] **Fase 5** — predicción del Mundial 2026 (`src/predict/world_cup.py`):
   - [x] **Fuente de fixtures**: martj42 (NO API-Football — su plan free no da acceso a 2026, solo 2022–2024). martj42 ya trae los 72 fixtures del Mundial con la columna `neutral` (anfitriones México/USA/Canadá marcados), y los nombres calzan con el entrenamiento del Elo por construcción.
   - [x] predicción 1X2 partido a partido con el Elo de selecciones (entrena con jugados, predice los pendientes respetando `neutral`). Sanity OK: España/Argentina top del ranking; favoritos coherentes.
-  - [ ] simulación Monte Carlo del bracket → probabilidad de avanzar de fase y de salir campeón.
+  - [x] simulación Monte Carlo del torneo completo (`src/predict/simulate.py` + `src/predict/bracket.py`): goles vía Poisson de selecciones (neutral promediando orientaciones), fase de grupos real (12 grupos, desempates puntos→GD→GF), y bracket OFICIAL FIFA (R32→final verificado de fuentes oficiales). Asignación de mejores terceros vía matching bipartito que respeta la elegibilidad oficial (la tabla Annex C de 495 filas no es pública; el resto del cuadro es oficial). Salida: probabilidad por ronda y de campeón, por selección.
 
 ## Filosofía
 
