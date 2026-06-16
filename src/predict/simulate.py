@@ -213,6 +213,17 @@ def train_goal_model(since: str = "2010-01-01") -> PoissonModel:
     return PoissonModel(max_goals=10).fit(df[df["date"] >= since])
 
 
+def train_elo_goal_model(since: str = "2010-01-01"):
+    """
+    Modelo de goles AJUSTADO POR RIVAL (Elo) — el recomendado para el Monte Carlo.
+    Corrige el sesgo del Poisson crudo, que infla a equipos que golean a rivales
+    débiles de su confederación (Irán, NZ...). Misma interfaz expected_goals(a, b).
+    """
+    from src.models.elo_poisson import EloGoalModel
+    df = InternationalResultsLoader().load().dropna(subset=["home_score", "away_score"])
+    return EloGoalModel(max_goals=10).fit(df[df["date"] >= since])
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Demo:  python -m src.predict.simulate
 # Monte Carlo de la FASE DE GRUPOS: probabilidad de avanzar de cada selección.

@@ -38,7 +38,7 @@ from src.predict.simulate import (
     load_world_cup_fixtures,
     sample_score,
     simulate_group_stage,
-    train_goal_model,
+    train_elo_goal_model,
 )
 
 logger = logging.getLogger(__name__)
@@ -232,7 +232,7 @@ def monte_carlo(n: int = 10000, seed: int = 42) -> pd.DataFrame:
     cada ronda (clasificar de grupos, R16, cuartos, semis, final) y de ser campeón.
     """
     rng = np.random.default_rng(seed)
-    model = train_goal_model()
+    model = train_elo_goal_model()      # goles ajustados por rival (corrige el sesgo)
     fixtures = load_world_cup_fixtures()
     all_teams = sorted(set(fixtures["home_team"]) | set(fixtures["away_team"]))
     grows = group_rows_by_letter(fixtures, GROUPS_BY_LETTER)   # pre-cómputo, fuera del loop
