@@ -106,6 +106,9 @@ pytest -q
   - [x] **Fix del sesgo de goles** (`src/models/elo_poisson.py`, `EloGoalModel`): deriva λ de la diferencia de Elo (ajustada por rival) en vez de promedios crudos. `b` (goles/punto-Elo) y `total_base` calibrados de datos. Corrige que el Poisson inflara a equipos que golean a rivales débiles (Irán, NZ). Misma interfaz `expected_goals` → el simulador lo usa sin cambios.
   - **Resultado 10k sims (con Elo-goles, creíble)**: Spain 17.4%, Argentina 13.9%, France 8.8%, Brazil 5.0%, Portugal 4.9%, Morocco 4.7%, England 4.6%, Iran 4.1%. El top calca el ranking Elo (potencias reales); Irán bajó del #3 sesgado al #8.
   - (Histórico: con el Poisson crudo Irán salía #3 con 8% — sesgo de confederación débil, ya corregido.)
+  - [x] **Verificación contra resultados reales** (`src/predict/verify.py`):
+    - 16 partidos jugados del Mundial (sin leakage, entrena pre-torneo): 6/16 acierto, log-loss 1.13. Diagnóstico: tanda atípica con 50% empates; en decisivos 6/8 = 75%.
+    - **Walk-forward sobre 8.124 partidos** (desde 2018, predice-luego-actualiza): acierto **59.4%** (60.8% competitivos), log-loss **0.885** (azar 1.099) → el modelo le gana al azar holgado y está **bien calibrado** (curva de fiabilidad pegada a la diagonal; leve sub-confianza en favoritazos extremos).
 
 ## Filosofía
 

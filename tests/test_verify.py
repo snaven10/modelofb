@@ -77,3 +77,41 @@ def test_falla_sin_partidos_jugados(monkeypatch):
     _patch(monkeypatch, solo_pre)
     with pytest.raises(ValueError):
         verify_world_cup(cutoff="2026-06-11")
+
+
+def _walk_df():
+    """Warmup (pre-2018) + período de test, con un fuerte y un flojo claros."""
+    filas = []
+    # warmup: Fuerte le gana a Flojo repetido (2015-2017)
+    for i in range(8):
+        filas.append((f"201{5+i%3}-0{1+i%9}-01", "Fuerte", "Flojo", 3, 0, "Friendly", False))
+    # test (>=2018): más partidos para predecir walk-forward
+    for i in range(6):
+        filas.append((f"2018-0{1+i}-01", "Fuerte", "Flojo", 2, 0, "FIFA World Cup qualification", False))
+        filas.append((f"2019-0{1+i}-01", "Flojo", "Fuerte", 0, 2, "Friendly", False))
+    df = pd.DataFrame(filas, columns=["date", "home_team", "away_team",
+                                      "home_score", "away_score", "tournament", "neutral"])
+    df["date"] = pd.to_datetime(df["date"])
+    df["home_score"] = df["home_score"].astype("Int64")
+    df["away_score"] = df["away_score"].astype("Int64")
+    df["is_competitive"] = df["tournament"] != "Friendly"
+    df["result"] = pd.NA
+    return df
+
+
+def test_walk_forward_devuelve_metricas_y_calibracion(monkeypatch):
+    from src.predict.verify import walk_forward_verify
+    _patch(monkeypatch, _walk_df())
+    m, calib = walk_forward_verify(start="2018-01-01")
+    assert set(m) >= {"n", "accuracy", "log_loss", "brier", "log_loss_azar", "pct_empates"}
+    assert m["n"] == 12                      # 12 partidos de test (>=2018)
+    assert calib.shape[1] == 3               # tabla de calibración (prob, freq, n) por bin
+
+
+def test_walk_forward_acierta_al_fuerte(monkeypatch):
+    """Fuerte siempre le gana a Flojo → el walk-forward debe acertar casi todo."""
+    from src.predict.verify import walk_forward_verify
+    _patch(monkeypatch, _walk_df())
+    m, _ = walk_forward_verify(start="2018-01-01")
+    assert m["accuracy"] >= 0.9
+    assert m["log_loss"] < m["log_loss_azar"]

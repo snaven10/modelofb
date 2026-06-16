@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 
 from src.data_loaders.international_loader import InternationalResultsLoader
-from src.evaluation.metrics import log_loss
+from src.evaluation.metrics import calibration_table, evaluate, log_loss
 from src.models.elo import EloModel
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,52 @@ def verify_world_cup(cutoff: str = WORLD_CUP_START) -> tuple[pd.DataFrame, dict]
         "log_loss_azar": float(np.log(3)),
     }
     return tabla, metrics
+
+
+def walk_forward_verify(start: str = "2018-01-01",
+                        competitive_only: bool = False) -> tuple[dict, np.ndarray]:
+    """
+    Verificación WALK-FORWARD sobre muchos partidos (la prueba estadísticamente seria).
+
+    Recorre los partidos en orden cronológico: ANTES de cada uno predice con el Elo
+    entrenado solo con el pasado, registra, y DESPUÉS lo actualiza. Así cada predicción
+    usa exclusivamente información previa — cero leakage, sobre miles de partidos.
+
+    El Elo se "calienta" con todo lo anterior a `start` (eso fija también la curva de
+    empate, calibrada solo con el pasado). Durante el test solo se actualizan ratings.
+
+    Devuelve (métricas, tabla_de_calibración).
+    """
+    df = (InternationalResultsLoader().load()
+          .dropna(subset=["home_score", "away_score"])
+          .sort_values("date"))
+    warmup = df[df["date"] < pd.Timestamp(start)]
+    test = df[df["date"] >= pd.Timestamp(start)]
+    if competitive_only:
+        test = test[test["is_competitive"]]
+    if warmup.empty or test.empty:
+        raise ValueError("Rango insuficiente para walk-forward.")
+
+    elo = EloModel().fit(warmup)          # ratings + curva de empate, solo con el pasado
+
+    y, probs = [], []
+    for r in test.itertuples(index=False):
+        neutral = bool(getattr(r, "neutral", False))
+        ph, pdraw, pa = elo.predict_proba(r.home_team, r.away_team, neutral=neutral)
+        real = "H" if r.home_score > r.away_score else ("A" if r.home_score < r.away_score else "D")
+        y.append(real)
+        probs.append([ph, pdraw, pa])
+        # walk-forward: actualizar DESPUÉS de predecir (la predicción no vio este partido)
+        elo.update_one(r.home_team, r.away_team, int(r.home_score), int(r.away_score),
+                       neutral=neutral, is_competitive=bool(getattr(r, "is_competitive", True)))
+
+    y_arr, probs_arr = np.array(y), np.array(probs)
+    metrics = evaluate(y_arr, probs_arr)
+    metrics["log_loss_azar"] = float(np.log(3))
+    # empates vs decisivos
+    empate_mask = y_arr == "D"
+    metrics["pct_empates"] = float(empate_mask.mean())
+    return metrics, calibration_table(y_arr, probs_arr, n_bins=10)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
