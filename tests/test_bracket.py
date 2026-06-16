@@ -80,3 +80,31 @@ def test_resolve_spec():
     assert B._resolve_spec(("W", "E"), standings, {}) == "g1"
     assert B._resolve_spec(("R", "E"), standings, {}) == "g2"
     assert B._resolve_spec(("3", 74), standings, {74: "E"}) == "g3"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Smoke test end-to-end: el torneo completo corre sin reventar (pocas sims)
+# ──────────────────────────────────────────────────────────────────────────────
+def test_simulate_tournament_corre_end_to_end():
+    """Un torneo completo: grupos → bracket → final, sin error y con un campeón."""
+    from src.predict.simulate import group_rows_by_letter, load_world_cup_fixtures, train_elo_goal_model
+    model = train_elo_goal_model()
+    fixtures = load_world_cup_fixtures()
+    grows = group_rows_by_letter(fixtures, B.GROUPS_BY_LETTER)
+    rng = np.random.default_rng(0)
+    winners = B.simulate_tournament(model, grows, rng)
+    # El partido 104 es la final → su ganador es el campeón.
+    assert 104 in winners
+    todos = {t for eq in B.GROUPS_BY_LETTER.values() for t in eq}
+    assert winners[104] in todos          # el campeón es un equipo real del torneo
+
+
+def test_monte_carlo_estructura():
+    """monte_carlo con pocas sims devuelve probabilidades por ronda que suman sentido."""
+    tabla = B.monte_carlo(n=20, seed=0)
+    assert set(tabla.columns) >= {"team", "R32", "R16", "QF", "SF", "Final", "Champion"}
+    assert len(tabla) == 48                       # las 48 selecciones
+    # las probabilidades de campeón suman ~1 (un campeón por simulación)
+    assert tabla["Champion"].sum() == pytest.approx(1.0, abs=1e-9)
+    # avanzar a R32 es más común que ser campeón, para todos
+    assert (tabla["R32"] >= tabla["Champion"]).all()
