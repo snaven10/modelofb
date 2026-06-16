@@ -129,32 +129,57 @@ def _rank_group(records: dict[str, TeamRecord],
     return sorted(recs, key=lambda r: (r.points, r.gd, r.gf, rng.random()), reverse=True)
 
 
-def simulate_group(model: PoissonModel, fixtures: pd.DataFrame,
-                   rng: np.random.Generator) -> list[TeamRecord]:
-    """Juega los 6 partidos de un grupo (round-robin real) y devuelve la tabla ordenada."""
-    teams = sorted(set(fixtures["home_team"]) | set(fixtures["away_team"]))
+def simulate_group_rows(model: PoissonModel, rows: list[tuple[str, str, bool]],
+                        rng: np.random.Generator) -> list[TeamRecord]:
+    """
+    Juega un grupo desde filas YA extraídas (home, away, neutral) y devuelve la tabla.
+    Trabajar sobre tuplas (no DataFrame) es lo que hace viable el Monte Carlo: filtrar
+    pandas dentro del loop de simulaciones es carísimo; acá las filas se pre-computan
+    UNA vez y el hot loop solo hace aritmética.
+    """
+    teams = sorted({t for h, a, _ in rows for t in (h, a)})
     records = {t: TeamRecord(t) for t in teams}
-    for r in fixtures.itertuples(index=False):
-        ga, gb = sample_score(model, r.home_team, r.away_team, bool(r.neutral), rng)
-        records[r.home_team].add(ga, gb)
-        records[r.away_team].add(gb, ga)
+    for home, away, neutral in rows:
+        ga, gb = sample_score(model, home, away, neutral, rng)
+        records[home].add(ga, gb)
+        records[away].add(gb, ga)
     return _rank_group(records, rng)
 
 
-def simulate_group_stage(model: PoissonModel, fixtures: pd.DataFrame,
-                         groups: dict[str, list[str]],
+def simulate_group(model: PoissonModel, fixtures: pd.DataFrame,
+                   rng: np.random.Generator) -> list[TeamRecord]:
+    """Versión cómoda desde DataFrame (para uso suelto y tests). Convierte a filas."""
+    rows = [(r.home_team, r.away_team, bool(r.neutral))
+            for r in fixtures.itertuples(index=False)]
+    return simulate_group_rows(model, rows, rng)
+
+
+def group_rows_by_letter(fixtures: pd.DataFrame,
+                         groups: dict[str, list[str]]) -> dict[str, list[tuple[str, str, bool]]]:
+    """
+    Pre-computa, UNA sola vez, los partidos internos de cada grupo como listas de
+    (home, away, neutral). Esto saca el filtrado de pandas del hot loop del Monte Carlo.
+    """
+    out: dict[str, list[tuple[str, str, bool]]] = {}
+    for letra, equipos in groups.items():
+        eqset = set(equipos)
+        out[letra] = [(r.home_team, r.away_team, bool(r.neutral))
+                      for r in fixtures.itertuples(index=False)
+                      if r.home_team in eqset and r.away_team in eqset]
+    return out
+
+
+def simulate_group_stage(model: PoissonModel,
+                         group_rows: dict[str, list[tuple[str, str, bool]]],
                          rng: np.random.Generator) -> dict[str, list[TeamRecord]]:
     """
     Simula los 12 grupos y devuelve la tabla ordenada POR LETRA de grupo (A..L).
-    `groups` mapea letra → equipos. Trabajar por letra es lo que el bracket oficial
-    necesita (los cruces se definen como "1A", "2C", "mejor 3º de {C,E,F,H,I}", etc.).
+    `group_rows` mapea letra → partidos pre-computados (home, away, neutral); usá
+    group_rows_by_letter() una vez para construirlo. Trabajar por letra es lo que el
+    bracket oficial necesita ("1A", "2C", "mejor 3º de {C,E,F,H,I}", etc.).
     """
-    standings: dict[str, list[TeamRecord]] = {}
-    for letra, equipos in groups.items():
-        gfix = fixtures[fixtures["home_team"].isin(equipos)
-                        & fixtures["away_team"].isin(equipos)]
-        standings[letra] = simulate_group(model, gfix, rng)
-    return standings
+    return {letra: simulate_group_rows(model, rows, rng)
+            for letra, rows in group_rows.items()}
 
 
 def best_eight_thirds(standings: dict[str, list[TeamRecord]],
@@ -203,12 +228,13 @@ if __name__ == "__main__":
     # Para el demo standalone usamos grupos inferidos con claves genéricas (G1..G12);
     # las letras oficiales A..L viven en bracket.py y solo hacen falta para el cuadro.
     groups = {f"G{i+1}": g for i, g in enumerate(infer_groups(fixtures))}
+    grows = group_rows_by_letter(fixtures, groups)   # pre-cómputo (fuera del loop)
 
     from collections import Counter
     avanza = Counter()      # clasifica a eliminatorias (1º, 2º o mejor 3º)
     primero = Counter()     # gana su grupo
     for _ in range(N):
-        standings = simulate_group_stage(model, fixtures, groups, rng)
+        standings = simulate_group_stage(model, grows, rng)
         terceros = set(best_eight_thirds(standings, rng))
         for letra, tabla in standings.items():
             primero[tabla[0].team] += 1

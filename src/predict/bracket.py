@@ -34,6 +34,7 @@ from src.models.poisson import PoissonModel
 from src.predict.simulate import (
     best_eight_thirds,
     expected_goals,
+    group_rows_by_letter,
     load_world_cup_fixtures,
     sample_score,
     simulate_group_stage,
@@ -195,14 +196,14 @@ def _resolve_spec(spec: tuple, standings: dict[str, list],
 # ──────────────────────────────────────────────────────────────────────────────
 # Una simulación completa del torneo
 # ──────────────────────────────────────────────────────────────────────────────
-def simulate_tournament(model: PoissonModel, fixtures: pd.DataFrame,
-                        rng: np.random.Generator) -> dict[str, str]:
+def simulate_tournament(model: PoissonModel,
+                        group_rows: dict[str, list[tuple[str, str, bool]]],
+                        rng: np.random.Generator) -> dict[int, str]:
     """
-    Juega el Mundial entero una vez. Devuelve {ronda_alcanzada: equipo} en realidad
-    devolvemos el ganador de cada partido del bracket indexado por número de partido,
-    más una marca de hasta dónde llegó cada equipo (para agregaciones).
+    Juega el Mundial entero una vez. Devuelve {número_de_partido: ganador} para todo el
+    bracket. `group_rows` se pre-computa con group_rows_by_letter() (una vez).
     """
-    standings = simulate_group_stage(model, fixtures, GROUPS_BY_LETTER, rng)
+    standings = simulate_group_stage(model, group_rows, rng)
     thirds_letters = best_eight_thirds(standings, rng)
     thirds = assign_thirds(thirds_letters, rng)
 
@@ -222,12 +223,6 @@ def simulate_tournament(model: PoissonModel, fixtures: pd.DataFrame,
     return winners
 
 
-def reached_rounds(winners: dict[int, str], standings_teams: dict[str, list]) -> dict[str, str]:
-    """Hasta qué ronda llegó cada equipo (la más avanzada en que aparece como ganador)."""
-    # No usado por el Monte Carlo agregado; helper para inspección puntual.
-    return winners
-
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Monte Carlo: probabilidad por ronda y de campeón
 # ──────────────────────────────────────────────────────────────────────────────
@@ -240,11 +235,12 @@ def monte_carlo(n: int = 10000, seed: int = 42) -> pd.DataFrame:
     model = train_goal_model()
     fixtures = load_world_cup_fixtures()
     all_teams = sorted(set(fixtures["home_team"]) | set(fixtures["away_team"]))
+    grows = group_rows_by_letter(fixtures, GROUPS_BY_LETTER)   # pre-cómputo, fuera del loop
 
     counters = {r: Counter() for r in ["R32", "R16", "QF", "SF", "Final", "Champion"]}
 
     for _ in range(n):
-        standings = simulate_group_stage(model, fixtures, GROUPS_BY_LETTER, rng)
+        standings = simulate_group_stage(model, grows, rng)
         thirds_letters = best_eight_thirds(standings, rng)
         thirds = assign_thirds(thirds_letters, rng)
 
