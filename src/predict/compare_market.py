@@ -13,7 +13,9 @@ import logging
 
 import pandas as pd
 
+from src.data_loaders.international_loader import InternationalResultsLoader
 from src.data_loaders.odds_api_loader import OddsApiLoader
+from src.models.elo import EloModel
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,39 @@ def compare_champion(n: int = 10000, seed: int = 42) -> pd.DataFrame:
                       "dif": p_mod - p_mkt})
     tabla = pd.DataFrame(filas).sort_values("p_mercado", ascending=False).reset_index(drop=True)
     return tabla
+
+
+def compare_matches(model: EloModel | None = None) -> pd.DataFrame:
+    """
+    Compara, partido a partido, nuestra predicción 1X2 contra las odds del mercado de
+    los próximos partidos del Mundial (los que The Odds API tiene con cuota abierta).
+
+    Validación PROSPECTIVA: aún no se jugaron, así que no sabemos quién acertó; medimos
+    si COINCIDIMOS con el mercado (mismo favorito, probabilidades parecidas). El Elo se
+    entrena con todo lo jugado hasta hoy (incluidas las jornadas del Mundial ya jugadas).
+    """
+    odds = OddsApiLoader().world_cup_match_market()
+    if odds.empty:
+        raise ValueError("The Odds API no devolvió partidos del Mundial con odds 1X2.")
+
+    df = InternationalResultsLoader().load().dropna(subset=["home_score", "away_score"])
+    model = model or EloModel().fit(df)
+
+    etiquetas = ["H", "D", "A"]
+    filas = []
+    for r in odds.itertuples(index=False):
+        h, a = _norm(r.home_team), _norm(r.away_team)
+        ph, pd_, pa = model.predict_proba(h, a, neutral=True)   # Mundial: cancha neutral
+        fav_mod = etiquetas[[ph, pd_, pa].index(max(ph, pd_, pa))]
+        m = [r.p_market_h, r.p_market_d, r.p_market_a]
+        fav_mkt = etiquetas[m.index(max(m))]
+        filas.append({
+            "partido": f"{r.home_team} vs {r.away_team}",
+            "fav_modelo": fav_mod, "fav_mercado": fav_mkt,
+            "coincide": fav_mod == fav_mkt,
+            "p_local_mod": round(ph, 3), "p_local_mkt": round(r.p_market_h, 3),
+        })
+    return pd.DataFrame(filas)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
