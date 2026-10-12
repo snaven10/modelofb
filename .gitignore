@@ -40,3 +40,12 @@ __pycache__/
 # --- DevAI: índice/estado local de la herramienta de code-intelligence ---
 # Reconstruible (devai index) y específico de la máquina; no infla el repo.
 .devai/
+
+# --- DevCtxEngine: mismo criterio que .devai/ (índice local, reconstruible) ---
+.devctx/
+
+# --- Config MCP local: trae rutas absolutas de la máquina ---
+.mcp.json
+
+# --- Cobertura de tests ---
+.coverage
